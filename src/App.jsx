@@ -188,6 +188,16 @@ function App() {
     );
   }, [data]);
 
+  const matchOptions = useMemo(() => {
+    return [...requirements].sort((a, b) => {
+      const titleA = language === "bn" ? a.title_bn : a.title_en;
+
+      const titleB = language === "bn" ? b.title_bn : b.title_en;
+
+      return titleA.localeCompare(titleB, language);
+    });
+  }, [requirements, language]);
+
   const hashCounts = useMemo(() => {
     const counts = {};
 
@@ -1021,7 +1031,7 @@ function App() {
                           >
                             <option value="">{t.unmatched}</option>
 
-                            {requirements.map((requirement) => {
+                            {matchOptions.map((requirement) => {
                               const used = requirementAlreadyMatched(
                                 requirement.id,
                                 file.id,
@@ -1033,7 +1043,6 @@ function App() {
                                   value={requirement.id}
                                   disabled={used}
                                 >
-                                  {requirement.order}.{" "}
                                   {language === "bn"
                                     ? requirement.title_bn
                                     : requirement.title_en}

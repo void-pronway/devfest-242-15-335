@@ -34,11 +34,62 @@
 
 body {
   margin: 0;
-  background: var(--bg);
   color: var(--text);
+
+  background:
+    radial-gradient(
+      circle at 72% 38%,
+      rgba(218, 41, 28, 0.16),
+      transparent 34%
+    ),
+    linear-gradient(
+      135deg,
+      #06150f 0%,
+      #073c2b 35%,
+      #0b5b3f 55%,
+      #073c2b 75%,
+      #06150f 100%
+    );
+
+  background-size: 180% 180%;
+  animation: bdGradientMove 14s ease-in-out infinite;
+
   transition:
-    background 0.25s ease,
+    background 0.3s ease,
     color 0.25s ease;
+}
+
+@keyframes bdGradientMove {
+  0% {
+    background-position: 0% 50%;
+  }
+
+  50% {
+    background-position: 100% 50%;
+  }
+
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+:root[data-theme="light"] body {
+  background:
+    radial-gradient(
+      circle at 72% 38%,
+      rgba(218, 41, 28, 0.1),
+      transparent 30%
+    ),
+    linear-gradient(
+      135deg,
+      #f7fbf8 0%,
+      #c6d6cf 35%,
+      #9be7c6 60%,
+      #9eebb1 100%
+    );
+
+  background-size: 180% 180%;
+  animation: bdGradientMove 26s ease-in-out infinite;
 }
 
 button,
@@ -66,6 +117,10 @@ button {
   justify-content: space-between;
   gap: 24px;
   background: color-mix(in srgb, var(--bg) 90%, transparent);
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  backdrop-filter: blur(12px);
 }
 
 .brand {
@@ -82,8 +137,7 @@ button {
   place-items: center;
   background: var(--primary-soft);
   color: var(--primary);
-  border: 1px solid
-    color-mix(in srgb, var(--primary) 30%, transparent);
+  border: 1px solid color-mix(in srgb, var(--primary) 30%, transparent);
 }
 
 .animated-title {
@@ -253,8 +307,7 @@ button {
 .error-alert {
   color: var(--danger);
   background: var(--danger-soft);
-  border: 1px solid
-    color-mix(in srgb, var(--danger) 35%, transparent);
+  border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent);
 }
 
 .section {
@@ -305,8 +358,7 @@ button {
 }
 
 .info-card.highlight {
-  border-color:
-    color-mix(in srgb, var(--primary) 45%, var(--border));
+  border-color: color-mix(in srgb, var(--primary) 45%, var(--border));
   background: var(--primary-soft);
 }
 
@@ -317,6 +369,7 @@ button {
 
 .requirement-list {
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -336,8 +389,7 @@ button {
 
 .requirement-card:hover {
   transform: translateY(-1px);
-  border-color:
-    color-mix(in srgb, var(--primary) 45%, var(--border));
+  border-color: color-mix(in srgb, var(--primary) 45%, var(--border));
 }
 
 .order-number {
@@ -470,11 +522,7 @@ button {
 
 .status-warning {
   color: var(--warning);
-  background: color-mix(
-    in srgb,
-    var(--warning) 13%,
-    transparent
-  );
+  background: color-mix(in srgb, var(--warning) 13%, transparent);
 }
 
 .status-ok {
@@ -520,14 +568,25 @@ button {
 .uploaded-file-list {
   display: grid;
   gap: 10px;
+  max-height: 520px;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
+.uploaded-file-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.uploaded-file-list::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 999px;
 }
 
 .uploaded-file-card {
   display: grid;
-  grid-template-columns: 46px minmax(0, 1fr) minmax(
-      220px,
-      330px
-    ) 42px;
+  grid-template-columns:
+    46px minmax(0, 1fr) minmax(220px, 330px)
+    42px;
   align-items: center;
   gap: 14px;
   padding: 14px 16px;
@@ -537,11 +596,7 @@ button {
 }
 
 .uploaded-file-card.duplicate-file {
-  border-color: color-mix(
-    in srgb,
-    var(--warning) 45%,
-    var(--border)
-  );
+  border-color: color-mix(in srgb, var(--warning) 45%, var(--border));
 }
 
 .file-icon {
@@ -671,12 +726,7 @@ button {
   padding: 16px;
   border-radius: 14px;
   background: var(--danger-soft);
-  border: 1px solid
-    color-mix(
-      in srgb,
-      var(--danger) 25%,
-      transparent
-    );
+  border: 1px solid color-mix(in srgb, var(--danger) 25%, transparent);
 }
 
 .blocking-panel > strong {
@@ -730,4 +780,34 @@ button {
     flex-direction: column;
     gap: 2px;
   }
+}
+
+@media (max-width: 850px) {
+  .requirement-list {
+    grid-template-columns: 1fr;
+  }
+}
+
+:root[data-theme="dark"] .expiry-input-wrap input {
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] .expiry-input-wrap input {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"]
+  .expiry-input-wrap
+  input::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+  opacity: 0.9;
+  cursor: pointer;
+}
+
+:root[data-theme="light"]
+  .expiry-input-wrap
+  input::-webkit-calendar-picker-indicator {
+  filter: none;
+  opacity: 0.8;
+  cursor: pointer;
 }
