@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { PDFDocument } from "pdf-lib";
+import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -9,6 +9,7 @@ import {
   Sun,
   Trash2,
   Upload,
+  Download,
 } from "lucide-react";
 import "./App.css";
 
@@ -60,6 +61,14 @@ const text = {
     expiryDate: "Expiry date",
     theme: "Theme",
     language: "Language",
+    generatePackage: "Generate Package",
+    generateHint:
+      "The package can be generated when every blocking problem is resolved.",
+    generateButton: "Generate & Download PDF",
+    generating: "Generating PDF...",
+    readyToGenerate: "Ready to generate",
+    packageBlocked: "Package blocked",
+    blockingProblems: "Resolve these problems first:",
   },
 
   bn: {
@@ -108,6 +117,14 @@ const text = {
     expiryDate: "মেয়াদের তারিখ",
     theme: "থিম",
     language: "ভাষা",
+    generatePackage: "প্যাকেজ তৈরি করুন",
+    generateHint:
+      "সব বাধাদানকারী সমস্যা সমাধান হলে চূড়ান্ত PDF প্যাকেজ তৈরি করা যাবে।",
+    generateButton: "PDF তৈরি ও ডাউনলোড করুন",
+    generating: "PDF তৈরি হচ্ছে...",
+    readyToGenerate: "প্যাকেজ তৈরির জন্য প্রস্তুত",
+    packageBlocked: "প্যাকেজ তৈরি করা যাবে না",
+    blockingProblems: "প্রথমে এই সমস্যাগুলো সমাধান করুন:",
   },
 };
 
@@ -119,6 +136,8 @@ function App() {
 
     return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
   }
+
+  const [generating, setGenerating] = useState(false);
 
   const [language, setLanguage] = useState(
     () => localStorage.getItem("language") || "en",
@@ -427,6 +446,242 @@ function App() {
     };
   }
 
+  function safePdfText(value) {
+    return String(value ?? "").replace(/[^\x20-\x7E]/g, "?");
+  }
+
+  function wrapPdfText(textValue, font, size, maxWidth) {
+    const words = safePdfText(textValue).split(/\s+/);
+    const lines = [];
+    let current = "";
+
+    for (const word of words) {
+      const candidate = current ? `${current} ${word}` : word;
+
+      if (font.widthOfTextAtSize(candidate, size) <= maxWidth) {
+        current = candidate;
+      } else {
+        if (current) lines.push(current);
+        current = word;
+      }
+    }
+
+    if (current) lines.push(current);
+
+    return lines;
+  }
+
+  const blockingRequirements = data
+    ? requirements
+        .map((requirement) => ({
+          requirement,
+          status: getRequirementStatus(requirement),
+        }))
+        .filter((item) => item.status.blocking)
+    : [];
+
+  const canGenerate = Boolean(data) && blockingRequirements.length === 0;
+
+  async function generatePackage() {
+    if (!canGenerate || generating) return;
+
+    setGenerating(true);
+    setError("");
+
+    try {
+      const outputPdf = await PDFDocument.create();
+
+      const regularFont = await outputPdf.embedFont(StandardFonts.Helvetica);
+
+      const boldFont = await outputPdf.embedFont(StandardFonts.HelveticaBold);
+
+      /* ---------------- COVER PAGE ---------------- */
+
+      const cover = outputPdf.addPage([595.28, 841.89]);
+      const pageWidth = cover.getWidth();
+
+      cover.drawText("TENDER DOCUMENT PACKAGE", {
+        x: 42,
+        y: 785,
+        size: 22,
+        font: boldFont,
+        color: rgb(0.05, 0.35, 0.32),
+      });
+
+      cover.drawText("Generated Tender Submission Package", {
+        x: 42,
+        y: 758,
+        size: 11,
+        font: regularFont,
+        color: rgb(0.35, 0.4, 0.45),
+      });
+
+      cover.drawLine({
+        start: { x: 42, y: 738 },
+        end: { x: pageWidth - 42, y: 738 },
+        thickness: 1,
+        color: rgb(0.82, 0.85, 0.87),
+      });
+
+      let y = 708;
+
+      const details = [
+        ["Tender ID", data.tender.tender_id],
+        ["Tender Title", data.tender.title],
+        ["Procuring Entity", data.tender.procuring_entity],
+        ["Bidder", data.tender.bidder],
+        ["Submission Deadline", data.tender.submission_deadline],
+        ["Package Generated", new Date().toISOString().slice(0, 10)],
+      ];
+
+      for (const [label, value] of details) {
+        cover.drawText(`${label}:`, {
+          x: 42,
+          y,
+          size: 10,
+          font: boldFont,
+          color: rgb(0.15, 0.18, 0.22),
+        });
+
+        const lines = wrapPdfText(value, regularFont, 10, 350);
+
+        lines.forEach((line, index) => {
+          cover.drawText(line, {
+            x: 165,
+            y: y - index * 14,
+            size: 10,
+            font: regularFont,
+            color: rgb(0.15, 0.18, 0.22),
+          });
+        });
+
+        y -= Math.max(28, lines.length * 14 + 10);
+      }
+
+      y -= 8;
+
+      cover.drawText("Included Documents", {
+        x: 42,
+        y,
+        size: 14,
+        font: boldFont,
+        color: rgb(0.05, 0.35, 0.32),
+      });
+
+      y -= 24;
+
+      const includedRequirements = requirements.filter((requirement) =>
+        Boolean(getMatchedFile(requirement.id)),
+      );
+
+      for (const requirement of includedRequirements) {
+        const lines = wrapPdfText(
+          `${requirement.order}. ${requirement.title_en}`,
+          regularFont,
+          9,
+          pageWidth - 95,
+        );
+
+        for (const line of lines) {
+          cover.drawText(line, {
+            x: 50,
+            y,
+            size: 9,
+            font: regularFont,
+            color: rgb(0.18, 0.21, 0.25),
+          });
+
+          y -= 12;
+        }
+
+        y -= 3;
+      }
+
+      /* ---------------- DOCUMENT PAGES ---------------- */
+
+      for (const requirement of requirements) {
+        const matchedFile = getMatchedFile(requirement.id);
+
+        if (!matchedFile) continue;
+
+        const sourcePdf = await PDFDocument.load(matchedFile.bytes);
+
+        const sourcePages = sourcePdf.getPages();
+
+        for (const sourcePage of sourcePages) {
+          const { width, height } = sourcePage.getSize();
+
+          const embeddedPage = await outputPdf.embedPage(sourcePage);
+
+          const footerSpace = 28;
+
+          const targetPage = outputPdf.addPage([width, height + footerSpace]);
+
+          targetPage.drawPage(embeddedPage, {
+            x: 0,
+            y: footerSpace,
+            width,
+            height,
+          });
+        }
+      }
+
+      /* ---------------- FOOTERS ---------------- */
+
+      const finalPages = outputPdf.getPages();
+      const totalPages = finalPages.length;
+
+      finalPages.forEach((page, index) => {
+        const footerText = `${safePdfText(
+          data.tender.tender_id,
+        )} | Page ${index + 1} of ${totalPages}`;
+
+        page.drawText(footerText, {
+          x: 36,
+          y: 9,
+          size: 8,
+          font: regularFont,
+          color: rgb(0.25, 0.28, 0.32),
+        });
+      });
+
+      /* ---------------- DOWNLOAD ---------------- */
+
+      const pdfBytes = await outputPdf.save();
+
+      const blob = new Blob([pdfBytes], {
+        type: "application/pdf",
+      });
+
+      const url = URL.createObjectURL(blob);
+
+      const anchor = document.createElement("a");
+
+      anchor.href = url;
+      anchor.download = `${data.tender.tender_id}_Package.pdf`;
+
+      document.body.appendChild(anchor);
+
+      anchor.click();
+
+      anchor.remove();
+
+      setTimeout(() => {
+        URL.revokeObjectURL(url);
+      }, 1000);
+    } catch (err) {
+      console.error(err);
+
+      setError(
+        language === "bn"
+          ? "PDF প্যাকেজ তৈরি করা যায়নি।"
+          : "The PDF package could not be generated.",
+      );
+    } finally {
+      setGenerating(false);
+    }
+  }
+
   return (
     <div className="app">
       <header className="topbar">
@@ -626,6 +881,69 @@ function App() {
                   );
                 })}
               </div>
+            </section>
+
+            <section className="section generate-section">
+              <div className="section-heading">
+                <div>
+                  <span className="eyebrow">05</span>
+
+                  <h2>{t.generatePackage}</h2>
+
+                  <p>{t.generateHint}</p>
+                </div>
+
+                <div
+                  className={
+                    canGenerate
+                      ? "generation-state ready-state"
+                      : "generation-state blocked-state"
+                  }
+                >
+                  {canGenerate ? (
+                    <>
+                      <CheckCircle2 size={17} />
+                      {t.readyToGenerate}
+                    </>
+                  ) : (
+                    <>
+                      <AlertTriangle size={17} />
+                      {t.packageBlocked}
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {!canGenerate && blockingRequirements.length > 0 && (
+                <div className="blocking-panel">
+                  <strong>{t.blockingProblems}</strong>
+
+                  <div className="blocking-list">
+                    {blockingRequirements.map(({ requirement, status }) => (
+                      <div className="blocking-item" key={requirement.id}>
+                        <span>
+                          {requirement.id} ·{" "}
+                          {language === "bn"
+                            ? requirement.title_bn
+                            : requirement.title_en}
+                        </span>
+
+                        <span>{status.label}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <button
+                className="generate-button"
+                disabled={!canGenerate || generating}
+                onClick={generatePackage}
+              >
+                <Download size={19} />
+
+                {generating ? t.generating : t.generateButton}
+              </button>
             </section>
 
             <section className="section">
