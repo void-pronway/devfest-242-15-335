@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
+import { PDFDocument } from "pdf-lib";
 import {
+  AlertTriangle,
+  CheckCircle2,
   FileText,
   Languages,
   Moon,
   Sun,
+  Trash2,
   Upload,
-  AlertTriangle,
-  CheckCircle2,
 } from "lucide-react";
 import "./App.css";
 
@@ -24,24 +26,38 @@ const text = {
     requirements: "Document Requirements",
     requirementsHint:
       "Documents are automatically displayed in the required package order.",
-    order: "Order",
-    document: "Document",
-    requirement: "Requirement",
-    expiry: "Expiry",
-    status: "Status",
     mandatory: "Mandatory",
     optional: "Optional",
-    required: "Required",
-    notRequired: "Not required",
+    expiry: "Expiry",
     missing: "Missing",
     notProvided: "Not provided",
+    expiryNeeded: "Expiry date needed",
+    expired: "Expired",
+    ok: "OK",
     chooseJson: "Choose requirements.json",
     invalidJson: "Could not load this requirements file.",
     ready: "Requirements loaded",
     waiting: "Waiting for tender requirements",
     waitingDesc:
       "Load requirements.json to begin building and checking the tender package.",
-    loaded: "documents required",
+    loaded: "requirements",
+    uploadPdfs: "Upload Tender Documents",
+    uploadPdfHint:
+      "Upload the PDF files that will be checked and included in the package.",
+    choosePdfs: "Choose PDF files",
+    noFiles: "No PDF files uploaded yet.",
+    pages: "pages",
+    page: "page",
+    matchTo: "Match to requirement",
+    unmatched: "Not matched",
+    duplicate: "Duplicate file",
+    remove: "Remove",
+    invalidPdf: "Only PDF files are allowed.",
+    brokenPdf: "This PDF could not be read.",
+    limitFiles: "Maximum 30 PDF files are allowed.",
+    limitSize: "Total PDF size cannot exceed 50 MB.",
+    duplicateBlocked: "Only one copy of an identical file can be matched.",
+    expiryDate: "Expiry date",
     theme: "Theme",
     language: "Language",
   },
@@ -59,30 +75,51 @@ const text = {
     requirements: "প্রয়োজনীয় নথি",
     requirementsHint:
       "নথিগুলো প্যাকেজে প্রয়োজনীয় ক্রম অনুযায়ী স্বয়ংক্রিয়ভাবে দেখানো হয়।",
-    order: "ক্রম",
-    document: "নথি",
-    requirement: "প্রয়োজন",
-    expiry: "মেয়াদ",
-    status: "অবস্থা",
     mandatory: "বাধ্যতামূলক",
     optional: "ঐচ্ছিক",
-    required: "প্রয়োজন",
-    notRequired: "প্রয়োজন নেই",
+    expiry: "মেয়াদ",
     missing: "অনুপস্থিত",
     notProvided: "দেওয়া হয়নি",
+    expiryNeeded: "মেয়াদের তারিখ প্রয়োজন",
+    expired: "মেয়াদোত্তীর্ণ",
+    ok: "ঠিক আছে",
     chooseJson: "requirements.json নির্বাচন করুন",
     invalidJson: "requirements ফাইলটি লোড করা যায়নি।",
     ready: "চাহিদার তালিকা লোড হয়েছে",
     waiting: "দরপত্রের তথ্যের অপেক্ষায়",
-    waitingDesc:
-      "প্যাকেজ তৈরি ও যাচাই শুরু করতে requirements.json লোড করুন।",
-    loaded: "টি নথি প্রয়োজন",
+    waitingDesc: "প্যাকেজ তৈরি ও যাচাই শুরু করতে requirements.json লোড করুন।",
+    loaded: "টি শর্ত",
+    uploadPdfs: "দরপত্রের নথি আপলোড করুন",
+    uploadPdfHint:
+      "যে PDF নথিগুলো যাচাই ও প্যাকেজে যুক্ত হবে সেগুলো আপলোড করুন।",
+    choosePdfs: "PDF নির্বাচন করুন",
+    noFiles: "এখনও কোনো PDF আপলোড করা হয়নি।",
+    pages: "পৃষ্ঠা",
+    page: "পৃষ্ঠা",
+    matchTo: "শর্তের সাথে মিলান",
+    unmatched: "মেলানো হয়নি",
+    duplicate: "ডুপ্লিকেট ফাইল",
+    remove: "মুছুন",
+    invalidPdf: "শুধু PDF ফাইল গ্রহণ করা হবে।",
+    brokenPdf: "PDF ফাইলটি পড়া যায়নি।",
+    limitFiles: "সর্বোচ্চ ৩০টি PDF আপলোড করা যাবে।",
+    limitSize: "সব PDF মিলিয়ে সর্বোচ্চ ৫০ MB হতে পারবে।",
+    duplicateBlocked: "একই ফাইলের কেবল একটি কপি কোনো শর্তের সাথে মেলানো যাবে।",
+    expiryDate: "মেয়াদের তারিখ",
     theme: "থিম",
     language: "ভাষা",
   },
 };
 
 function App() {
+  function formatFileSize(bytes) {
+    if (bytes < 1024 * 1024) {
+      return `${(bytes / 1024).toFixed(1)} KB`;
+    }
+
+    return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
+  }
+
   const [language, setLanguage] = useState(
     () => localStorage.getItem("language") || "en",
   );
@@ -92,7 +129,17 @@ function App() {
   );
 
   const [titleBangla, setTitleBangla] = useState(true);
+
   const [data, setData] = useState(null);
+
+  const [uploadedFiles, setUploadedFiles] = useState([]);
+
+  // fileId -> requirementId
+  const [matches, setMatches] = useState({});
+
+  // requirementId -> YYYY-MM-DD
+  const [expiryDates, setExpiryDates] = useState({});
+
   const [error, setError] = useState("");
 
   const t = text[language];
@@ -122,6 +169,16 @@ function App() {
     );
   }, [data]);
 
+  const hashCounts = useMemo(() => {
+    const counts = {};
+
+    uploadedFiles.forEach((file) => {
+      counts[file.hash] = (counts[file.hash] || 0) + 1;
+    });
+
+    return counts;
+  }, [uploadedFiles]);
+
   async function loadRequirements(event) {
     const file = event.target.files?.[0];
 
@@ -133,14 +190,16 @@ function App() {
       const raw = await file.text();
       const parsed = JSON.parse(raw);
 
-      if (
-        !parsed.tender ||
-        !Array.isArray(parsed.requirements)
-      ) {
-        throw new Error("Invalid requirements structure");
+      if (!parsed.tender || !Array.isArray(parsed.requirements)) {
+        throw new Error("Invalid structure");
       }
 
       setData(parsed);
+
+      // reset current work if a different requirements file is loaded
+      setUploadedFiles([]);
+      setMatches({});
+      setExpiryDates({});
     } catch {
       setData(null);
       setError(t.invalidJson);
@@ -149,17 +208,222 @@ function App() {
     }
   }
 
+  async function hashBuffer(arrayBuffer) {
+    const digest = await crypto.subtle.digest("SHA-256", arrayBuffer);
+
+    return Array.from(new Uint8Array(digest))
+      .map((byte) => byte.toString(16).padStart(2, "0"))
+      .join("");
+  }
+
+  async function uploadPdfFiles(event) {
+    const selectedFiles = Array.from(event.target.files || []);
+
+    if (!selectedFiles.length) return;
+
+    setError("");
+
+    if (uploadedFiles.length + selectedFiles.length > 30) {
+      setError(t.limitFiles);
+      event.target.value = "";
+      return;
+    }
+
+    const existingSize = uploadedFiles.reduce(
+      (total, item) => total + item.size,
+      0,
+    );
+
+    const newSize = selectedFiles.reduce((total, file) => total + file.size, 0);
+
+    if (existingSize + newSize > 50 * 1024 * 1024) {
+      setError(t.limitSize);
+      event.target.value = "";
+      return;
+    }
+
+    const accepted = [];
+    const errors = [];
+
+    for (const file of selectedFiles) {
+      const isPdf =
+        file.type === "application/pdf" ||
+        file.name.toLowerCase().endsWith(".pdf");
+
+      if (!isPdf) {
+        errors.push(`${file.name}: ${t.invalidPdf}`);
+        continue;
+      }
+
+      try {
+        const buffer = await file.arrayBuffer();
+
+        const pdf = await PDFDocument.load(buffer);
+
+        const pageCount = pdf.getPageCount();
+
+        const hash = await hashBuffer(buffer);
+
+        accepted.push({
+          id: crypto.randomUUID(),
+          file,
+          name: file.name,
+          size: file.size,
+          pageCount,
+          hash,
+          bytes: new Uint8Array(buffer),
+        });
+      } catch {
+        errors.push(`${file.name}: ${t.brokenPdf}`);
+      }
+    }
+
+    setUploadedFiles((current) => [...current, ...accepted]);
+
+    if (errors.length) {
+      setError(errors.join(" | "));
+    }
+
+    event.target.value = "";
+  }
+
+  function removeUploadedFile(fileId) {
+    const requirementId = matches[fileId];
+
+    setUploadedFiles((current) => current.filter((file) => file.id !== fileId));
+
+    setMatches((current) => {
+      const next = { ...current };
+      delete next[fileId];
+      return next;
+    });
+
+    if (requirementId) {
+      setExpiryDates((current) => {
+        const next = { ...current };
+        delete next[requirementId];
+        return next;
+      });
+    }
+  }
+
+  function requirementAlreadyMatched(requirementId, exceptFileId) {
+    return Object.entries(matches).some(
+      ([fileId, matchedRequirementId]) =>
+        fileId !== exceptFileId && matchedRequirementId === requirementId,
+    );
+  }
+
+  function duplicateAlreadyMatched(file) {
+    return uploadedFiles.some(
+      (otherFile) =>
+        otherFile.id !== file.id &&
+        otherFile.hash === file.hash &&
+        Boolean(matches[otherFile.id]),
+    );
+  }
+
+  function changeMatch(file, requirementId) {
+    setError("");
+
+    if (!requirementId) {
+      const oldRequirementId = matches[file.id];
+
+      setMatches((current) => {
+        const next = { ...current };
+        delete next[file.id];
+        return next;
+      });
+
+      if (oldRequirementId) {
+        setExpiryDates((current) => {
+          const next = { ...current };
+          delete next[oldRequirementId];
+          return next;
+        });
+      }
+
+      return;
+    }
+
+    if (requirementAlreadyMatched(requirementId, file.id)) {
+      return;
+    }
+
+    if (duplicateAlreadyMatched(file)) {
+      setError(t.duplicateBlocked);
+      return;
+    }
+
+    const oldRequirementId = matches[file.id];
+
+    setMatches((current) => ({
+      ...current,
+      [file.id]: requirementId,
+    }));
+
+    if (oldRequirementId && oldRequirementId !== requirementId) {
+      setExpiryDates((current) => {
+        const next = { ...current };
+        delete next[oldRequirementId];
+        return next;
+      });
+    }
+  }
+
+  function getMatchedFile(requirementId) {
+    const entry = Object.entries(matches).find(
+      ([, value]) => value === requirementId,
+    );
+
+    if (!entry) return null;
+
+    return uploadedFiles.find((file) => file.id === entry[0]) || null;
+  }
+
   function getRequirementStatus(requirement) {
-    if (requirement.mandatory) {
+    const matchedFile = getMatchedFile(requirement.id);
+
+    if (!matchedFile) {
+      if (requirement.mandatory) {
+        return {
+          label: t.missing,
+          className: "status status-danger",
+          blocking: true,
+        };
+      }
+
       return {
-        label: t.missing,
-        className: "status status-danger",
+        label: t.notProvided,
+        className: "status status-neutral",
+        blocking: false,
       };
     }
 
+    if (requirement.has_expiry) {
+      const expiryDate = expiryDates[requirement.id];
+
+      if (!expiryDate) {
+        return {
+          label: t.expiryNeeded,
+          className: "status status-warning",
+          blocking: true,
+        };
+      }
+
+      if (expiryDate < data.tender.submission_deadline) {
+        return {
+          label: t.expired,
+          className: "status status-danger",
+          blocking: true,
+        };
+      }
+    }
+
     return {
-      label: t.notProvided,
-      className: "status status-neutral",
+      label: t.ok,
+      className: "status status-ok",
+      blocking: false,
     };
   }
 
@@ -191,32 +455,22 @@ function App() {
           <button
             className="icon-button"
             onClick={() =>
-              setLanguage((current) =>
-                current === "en" ? "bn" : "en",
-              )
+              setLanguage((current) => (current === "en" ? "bn" : "en"))
             }
             title={t.language}
           >
             <Languages size={18} />
-            <span>
-              {language === "en" ? "বাংলা" : "English"}
-            </span>
+            <span>{language === "en" ? "বাংলা" : "English"}</span>
           </button>
 
           <button
             className="theme-button"
             onClick={() =>
-              setTheme((current) =>
-                current === "dark" ? "light" : "dark",
-              )
+              setTheme((current) => (current === "dark" ? "light" : "dark"))
             }
             title={t.theme}
           >
-            {theme === "dark" ? (
-              <Sun size={19} />
-            ) : (
-              <Moon size={19} />
-            )}
+            {theme === "dark" ? <Sun size={19} /> : <Moon size={19} />}
           </button>
         </div>
       </header>
@@ -274,25 +528,16 @@ function App() {
               </div>
 
               <div className="tender-grid">
-                <InfoCard
-                  label={t.tenderId}
-                  value={data.tender.tender_id}
-                />
+                <InfoCard label={t.tenderId} value={data.tender.tender_id} />
 
-                <InfoCard
-                  label={t.tenderTitle}
-                  value={data.tender.title}
-                />
+                <InfoCard label={t.tenderTitle} value={data.tender.title} />
 
                 <InfoCard
                   label={t.entity}
                   value={data.tender.procuring_entity}
                 />
 
-                <InfoCard
-                  label={t.bidder}
-                  value={data.tender.bidder}
-                />
+                <InfoCard label={t.bidder} value={data.tender.bidder} />
 
                 <InfoCard
                   label={t.deadline}
@@ -317,25 +562,18 @@ function App() {
 
               <div className="requirement-list">
                 {requirements.map((requirement) => {
-                  const status =
-                    getRequirementStatus(requirement);
+                  const status = getRequirementStatus(requirement);
+
+                  const matchedFile = getMatchedFile(requirement.id);
 
                   return (
-                    <article
-                      className="requirement-card"
-                      key={requirement.id}
-                    >
+                    <article className="requirement-card" key={requirement.id}>
                       <div className="order-number">
-                        {String(requirement.order).padStart(
-                          2,
-                          "0",
-                        )}
+                        {String(requirement.order).padStart(2, "0")}
                       </div>
 
                       <div className="requirement-main">
-                        <span className="requirement-id">
-                          {requirement.id}
-                        </span>
+                        <span className="requirement-id">{requirement.id}</span>
 
                         <h3>
                           {language === "bn"
@@ -351,35 +589,161 @@ function App() {
                                 : "tag optional"
                             }
                           >
-                            {requirement.mandatory
-                              ? t.mandatory
-                              : t.optional}
+                            {requirement.mandatory ? t.mandatory : t.optional}
                           </span>
 
                           {requirement.has_expiry && (
-                            <span className="tag expiry-tag">
-                              {t.expiry}
+                            <span className="tag expiry-tag">{t.expiry}</span>
+                          )}
+
+                          {matchedFile && (
+                            <span className="tag matched-tag">
+                              {matchedFile.name}
                             </span>
                           )}
                         </div>
+
+                        {matchedFile && requirement.has_expiry && (
+                          <div className="expiry-input-wrap">
+                            <label>{t.expiryDate}</label>
+
+                            <input
+                              type="date"
+                              value={expiryDates[requirement.id] || ""}
+                              onChange={(event) =>
+                                setExpiryDates((current) => ({
+                                  ...current,
+                                  [requirement.id]: event.target.value,
+                                }))
+                              }
+                            />
+                          </div>
+                        )}
                       </div>
 
-                      <div className={status.className}>
-                        {status.label}
-                      </div>
+                      <div className={status.className}>{status.label}</div>
                     </article>
                   );
                 })}
               </div>
+            </section>
+
+            <section className="section">
+              <div className="section-heading">
+                <div>
+                  <span className="eyebrow">04</span>
+                  <h2>{t.uploadPdfs}</h2>
+                  <p>{t.uploadPdfHint}</p>
+                </div>
+
+                <label className="upload-button">
+                  <Upload size={18} />
+                  {t.choosePdfs}
+
+                  <input
+                    type="file"
+                    accept=".pdf,application/pdf"
+                    multiple
+                    onChange={uploadPdfFiles}
+                    hidden
+                  />
+                </label>
+              </div>
+
+              {uploadedFiles.length === 0 ? (
+                <div className="pdf-empty">{t.noFiles}</div>
+              ) : (
+                <div className="uploaded-file-list">
+                  {uploadedFiles.map((file) => {
+                    const isDuplicate = hashCounts[file.hash] > 1;
+
+                    const duplicateLocked =
+                      duplicateAlreadyMatched(file) && !matches[file.id];
+
+                    return (
+                      <article
+                        className={`uploaded-file-card ${
+                          isDuplicate ? "duplicate-file" : ""
+                        }`}
+                        key={file.id}
+                      >
+                        <div className="file-icon">
+                          <FileText size={22} />
+                        </div>
+
+                        <div className="file-info">
+                          <strong>{file.name}</strong>
+
+                          <div className="file-meta">
+                            <span>
+                              {file.pageCount}{" "}
+                              {file.pageCount === 1 ? t.page : t.pages}
+                            </span>
+
+                            <span>{formatFileSize(file.size)}</span>
+
+                            {isDuplicate && (
+                              <span className="duplicate-label">
+                                <AlertTriangle size={13} />
+                                {t.duplicate}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="match-control">
+                          <label>{t.matchTo}</label>
+
+                          <select
+                            value={matches[file.id] || ""}
+                            disabled={duplicateLocked}
+                            onChange={(event) =>
+                              changeMatch(file, event.target.value)
+                            }
+                          >
+                            <option value="">{t.unmatched}</option>
+
+                            {requirements.map((requirement) => {
+                              const used = requirementAlreadyMatched(
+                                requirement.id,
+                                file.id,
+                              );
+
+                              return (
+                                <option
+                                  key={requirement.id}
+                                  value={requirement.id}
+                                  disabled={used}
+                                >
+                                  {requirement.order}.{" "}
+                                  {language === "bn"
+                                    ? requirement.title_bn
+                                    : requirement.title_en}
+                                </option>
+                              );
+                            })}
+                          </select>
+                        </div>
+
+                        <button
+                          className="remove-button"
+                          onClick={() => removeUploadedFile(file.id)}
+                          title={t.remove}
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
             </section>
           </>
         )}
       </main>
 
       <footer className="footer">
-        <span>
-          © 2026 Pronway P. Mitra · AI DevFest 2026
-        </span>
+        <span>© 2026 Pronway P. Mitra · AI DevFest 2026</span>
 
         <span>242-15-335</span>
       </footer>
@@ -389,9 +753,7 @@ function App() {
 
 function InfoCard({ label, value, highlight = false }) {
   return (
-    <div
-      className={`info-card ${highlight ? "highlight" : ""}`}
-    >
+    <div className={`info-card ${highlight ? "highlight" : ""}`}>
       <span>{label}</span>
       <strong>{value || "—"}</strong>
     </div>
